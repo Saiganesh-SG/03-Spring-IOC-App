@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!-- The below example lazy loading  -> When it requires it will  create and load the object based on the demand
+    it will perform dependency injection when invoke getbean method.
+    
+     <bean id="de" class="in.sg.beans.DieselEng" scope="prototype"/>-->
+       <!-- The below example eager loading-> means it will immediately 
+       create and load the object immediately whether it required or not -->
+        <bean id="deng" class="in.sg.beans.DieselEng" />
+    <bean id="peng" class="in.sg.beans.PetrolEng" />
+    <bean id="car" class="in.sg.beans.Car">
+		
+	   <!-- The below example denotes field dependency injection field also known as property 
+	   property tag indicates field injection.
+	   tag name="eng" - it denotes reference variable of interface IEngine
+       ref="peng""-> which refers bean you want to specify as dependent,
+       so that bean related class will considered as dependent class, so
+       PetrolEng class will considered as dependent class -->
+       <property name="eng" ref="peng" />
+          <!-- The below example denotes contructor dependency injection 
+	   constructor-arg  tag indicates constructor injection.
+	   tag name="eng" - it denotes reference variable of interface IEngine
+       ref="peng""-> which refers bean you want to specify as dependent,
+       so that bean related class will considered as dependent class, so
+       PetrolEng class will considered as dependent class
+          <constructor-arg name="eng" ref="peng" />-->
+       
+  </bean>
+
+</beans>
