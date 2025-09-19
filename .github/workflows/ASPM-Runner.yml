@@ -1,0 +1,90 @@
+name: "ASPM-RUNNER-ACCOUNT-1"
+on:
+  pull_request:
+    branches:
+      - "master"
+    types:
+      - "opened"
+      - "synchronize"
+      - "reopened"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: "Log level"
+        required: false
+        default: "info"
+jobs:
+  scanning:
+    runs-on: "ubuntu-latest"
+    env:
+      workdir: "${{ github.workspace }}/wrkdir"
+      ACCOUNT_ID: "1"
+      CONNECTOR_ID: "8436"
+      API_KEY: "df587299f15b01f64e5886c2308f8ad95cb50d755758cb7e2e41d1990c6b7180"
+    steps:
+      - uses: "actions/checkout@v4"
+        with:
+          path: "${{ env.workdir }}/src"
+
+      - name: Fetch and mask AWS credentials securely
+        id: fetch-aws-creds
+        run: |
+          echo "Fetching temporary AWS credentials for account: ${{ env.ACCOUNT_ID }}"
+
+          RESPONSE=$(curl -s -H "x-user-id: -1" \
+            -H "x-api-key: ${{ env.API_KEY }}" \
+            "https://slresultapi.qa.securin.io/resultapi/api/v1/accounts/${{ env.ACCOUNT_ID }}/aws/_token")
+
+          if [ -z "$RESPONSE" ] || [ "$(echo "$RESPONSE" | jq -r '.accessKey')" = "null" ]; then
+            echo "Failed to fetch AWS credentials"
+            exit 1
+          fi
+
+          ACCESS_KEY=$(echo "$RESPONSE" | jq -r '.accessKey')
+          SECRET_KEY=$(echo "$RESPONSE" | jq -r '.secretKey')
+          SESSION_TOKEN=$(echo "$RESPONSE" | jq -r '.sessionToken')
+
+          # Mask immediately using shell variables (never print the value)
+          echo "::add-mask::$ACCESS_KEY"
+          echo "::add-mask::$SECRET_KEY"
+          echo "::add-mask::$SESSION_TOKEN"
+
+          echo "access_key=$ACCESS_KEY" >> $GITHUB_OUTPUT
+          echo "secret_key=$SECRET_KEY" >> $GITHUB_OUTPUT
+          echo "session_token=$SESSION_TOKEN" >> $GITHUB_OUTPUT
+
+          # Set as environment variables (never print the value)
+          {
+            echo "AWS_ACCESS_KEY_ID=$ACCESS_KEY"
+            echo "AWS_SECRET_ACCESS_KEY=$SECRET_KEY"
+            echo "AWS_SESSION_TOKEN=$SESSION_TOKEN"
+            echo "AWS_DEFAULT_REGION=us-west-2"
+          } >> $GITHUB_ENV
+
+          unset RESPONSE ACCESS_KEY SECRET_KEY SESSION_TOKEN
+          echo "AWS credentials fetched and masked successfully"
+
+      - name: Download Runner
+        run: |
+          SCANNER_URL="s3://securin-qa-shiftleft/scanners/securin-cli/2.0.1/securin-runner"
+          
+          aws s3 cp "$SCANNER_URL" "${{ env.workdir }}/src/ASPMRunner"
+          chmod +x "${{ env.workdir }}/src/ASPMRunner"
+          
+          # Verify scanner downloaded
+          if [ -f "${{ env.workdir }}/src/ASPMRunner" ]; then
+            echo "Runner downloaded successfully"
+          else
+            echo "Failed to download Runner"
+            exit 1
+          fi
+      - name: Run Scan
+        working-directory: "${{ env.workdir }}/src"
+        run: ./ASPMRunner --connector_id "${{ env.CONNECTOR_ID }}" --account_id "${{ env.ACCOUNT_ID }}" --api_key "${{ env.API_KEY }}"
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scan-results
+          path: "${{ env.workdir }}/results"
